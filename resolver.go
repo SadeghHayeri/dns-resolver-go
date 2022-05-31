@@ -181,6 +181,7 @@ func sendToAny(ob QueueMessage, chs []chan QueueMessage) int {
 }
 
 func StartServer(zoneFilePath string, workerCount int, queueSize int) {
+	go RunHealthServer()
 	loadZoneFile(zoneFilePath)
 
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{
