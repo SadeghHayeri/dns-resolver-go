@@ -20,3 +20,9 @@ vpn                      60 A     216.146.45.240
 webapp                   60 A     216.146.46.10
 webapp                   60 A     216.146.46.11
 www                   43200 CNAME example.com.
+
+$ORIGIN google.com.
+mail                  14400 A     1.1.1.1
+vpn                      60 A     2.2.2.2
+webapp                   60 A     216.146.46.11
+www                   43200 CNAME example.com.
