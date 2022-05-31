@@ -193,7 +193,6 @@ func StartServer(zoneFilePath string, workerCount int, queueSize int) {
 	defer conn.Close()
 	fmt.Printf("server listening %s\n", conn.LocalAddr().String())
 
-	fmt.Println(workerCount)
 	// Start workers
 	var workerQueues []chan QueueMessage
 	for i := 0; i < workerCount; i++ {
