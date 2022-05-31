@@ -11,11 +11,7 @@ import (
 	"strings"
 )
 
-var MaxMessageSize int = 1000
-var DefaultTTL uint32 = 100
 var Hosts = map[string][]string{}
-var WorkerCount = 5
-var WorkerQueueSize = 10
 
 type QueueMessage struct {
 	conn *net.UDPConn
@@ -125,7 +121,7 @@ func sendUDPPacket(conn *net.UDPConn, addr *net.UDPAddr, packet layers.DNS) {
 	conn.WriteToUDP(buf.Bytes(), addr)
 }
 
-func resolve(conn *net.UDPConn, addr *net.UDPAddr, data []byte) {
+func resolve(workerId int, conn *net.UDPConn, addr *net.UDPAddr, data []byte) {
 	packet := gopacket.NewPacket(data, layers.LayerTypeDNS, gopacket.Default)
 	if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
 		dns, _ := dnsLayer.(*layers.DNS)
@@ -134,7 +130,7 @@ func resolve(conn *net.UDPConn, addr *net.UDPAddr, data []byte) {
 			hostname := string(question.Name)
 			resultIps, _ := Hosts[getDnsKey(question.Type.String(), hostname)]
 			dnsResultPacket := getDnsResultPacket(question, resultIps, dns.ID)
-			fmt.Println("DNS Resolved", string(question.Name), resultIps)
+			fmt.Println("DNS Resolved", workerId, string(question.Name), resultIps)
 			sendUDPPacket(conn, addr, dnsResultPacket)
 		}
 	}
@@ -163,10 +159,11 @@ func loadZoneFile(filePath string) {
 
 }
 
-func startResolverWorker(queue chan QueueMessage) {
+func startResolverWorker(workerId int, queue chan QueueMessage) {
+	fmt.Println("Worker started with id", workerId)
 	for {
 		message := <-queue
-		resolve(message.conn, message.addr, message.data)
+		resolve(workerId, message.conn, message.addr, message.data)
 	}
 }
 
@@ -183,8 +180,9 @@ func sendToAny(ob QueueMessage, chs []chan QueueMessage) int {
 	return to
 }
 
-func main() {
-	loadZoneFile("example.zone")
+func StartServer(zoneFilePath string, workerCount int, queueSize int) {
+	loadZoneFile(zoneFilePath)
+
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{
 		Port: 5353,
 		IP:   net.ParseIP("0.0.0.0"),
@@ -192,17 +190,19 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
 	defer conn.Close()
 	fmt.Printf("server listening %s\n", conn.LocalAddr().String())
 
+	fmt.Println(workerCount)
+	// Start workers
 	var workerQueues []chan QueueMessage
-	for i := 0; i < WorkerCount; i++ {
-		queue := make(chan QueueMessage)
+	for i := 0; i < workerCount; i++ {
+		queue := make(chan QueueMessage, queueSize)
 		workerQueues = append(workerQueues, queue)
-		go startResolverWorker(queue)
+		go startResolverWorker(i, queue)
 	}
 
+	// Start Serving
 	for {
 		message := make([]byte, MaxMessageSize)
 		rlen, from, err := conn.ReadFromUDP(message[:])
